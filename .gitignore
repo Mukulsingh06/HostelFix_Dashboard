@@ -1,0 +1,53 @@
+# ===== Database =====
+# The database file contains ALL user data and passwords — never upload it
+db.sqlite3
+*.sqlite3
+
+# ===== Python cache files =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# ===== Media uploads (user-uploaded images) =====
+media/
+
+# ===== Virtual environment (if you create one) =====
+venv/
+env/
+.venv/
+.env/
+
+# ===== Environment variables / secrets =====
+.env
+*.env
+.env.local
+.env.production
+
+# ===== OS generated files =====
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+*~
+
+# ===== IDE / Editor files =====
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# ===== Django =====
+*.log
+local_settings.py
+staticfiles/
+
+# ===== Distribution / packaging =====
+dist/
+build/
+*.egg-info/
+*.egg
+
+# ===== Test / verification files (not needed in repo) =====
+verify.py

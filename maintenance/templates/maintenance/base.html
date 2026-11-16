@@ -1,0 +1,163 @@
+{% load static %}
+{% load maintenance_tags %}
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}HostelFix{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: { extend: { fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] } } }
+    }
+  </script>
+  <link rel="stylesheet" href="{% static 'maintenance/css/custom.css' %}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+</head>
+<body class="bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 min-h-screen">
+
+  <!-- Toast Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  {% block body %}
+  <!-- Sidebar -->
+  <aside id="sidebar" class="sidebar fixed top-0 left-0 h-full bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 flex flex-col z-50">
+    <!-- Logo -->
+    <div class="px-6 py-5 flex items-center gap-3 border-b border-gray-100 dark:border-gray-800">
+      <div class="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center">
+        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+        </svg>
+      </div>
+      <div>
+        <h1 class="text-base font-bold text-gray-900 dark:text-white tracking-tight">HostelFix</h1>
+        <p class="text-[0.65rem] text-gray-400 font-medium uppercase tracking-wider">Maintenance System</p>
+      </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+      <a href="{% url 'dashboard' %}" class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zm10 0a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+        Dashboard
+      </a>
+      {% if request.user.profile.role == 'student' %}
+      <a href="{% url 'complaint_create' %}" class="nav-link {% if request.resolver_match.url_name == 'complaint_create' %}active{% endif %}">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4v16m8-8H4"/></svg>
+        New Complaint
+      </a>
+      {% endif %}
+      {% if request.user.profile.role == 'admin' %}
+      <div class="pt-4 pb-2 px-3">
+        <p class="text-[0.65rem] font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Management</p>
+      </div>
+      <a href="{% url 'dashboard' %}?status=registered" class="nav-link">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+        Unassigned
+      </a>
+      {% endif %}
+    </nav>
+
+    <!-- User card -->
+    <div class="px-4 py-4 border-t border-gray-100 dark:border-gray-800">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-full flex items-center justify-center text-white text-xs font-bold" style="background: {{ request.user.profile.avatar_color }}">
+          {{ request.user.profile.initials }}
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-semibold text-gray-900 dark:text-white truncate">{{ request.user.get_full_name|default:request.user.username }}</p>
+          <p class="text-xs text-gray-400">{{ request.user.profile.get_role_display }}</p>
+        </div>
+        <a href="{% url 'logout' %}" class="text-gray-400 hover:text-red-500 transition-colors" title="Logout">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+        </a>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Mobile toggle -->
+  <button onclick="document.getElementById('sidebar').classList.toggle('open')" class="lg:hidden fixed top-4 left-4 z-[60] p-2 bg-white dark:bg-gray-900 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700">
+    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+
+  <!-- Main Content -->
+  <main class="main-content min-h-screen">
+    <!-- Top header -->
+    <header class="sticky top-0 z-30 bg-white/80 dark:bg-gray-950/80 backdrop-blur-lg border-b border-gray-200 dark:border-gray-800">
+      <div class="px-6 lg:px-8 py-4 flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-bold text-gray-900 dark:text-white">{% block page_title %}Dashboard{% endblock %}</h2>
+          <p class="text-sm text-gray-500">{% block page_subtitle %}{% endblock %}</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <!-- Theme toggle -->
+          <button onclick="toggleTheme()" class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" title="Toggle theme">
+            <svg id="theme-icon-light" class="w-5 h-5 hidden dark:block" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/></svg>
+            <svg id="theme-icon-dark" class="w-5 h-5 block dark:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+          </button>
+          <!-- Role badge -->
+          <span class="px-3 py-1.5 rounded-full text-xs font-semibold
+            {% if request.user.profile.role == 'admin' %}bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300
+            {% elif request.user.profile.role == 'technician' %}bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300
+            {% else %}bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300{% endif %}">
+            {{ request.user.profile.get_role_display }}
+          </span>
+        </div>
+      </div>
+    </header>
+
+    <div class="px-6 lg:px-8 py-6">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+  {% endblock %}
+
+  <script>
+    // CSRF token helper
+    function getCookie(name) {
+      let v = null;
+      document.cookie.split(';').forEach(c => {
+        c = c.trim();
+        if (c.startsWith(name + '=')) v = decodeURIComponent(c.substring(name.length + 1));
+      });
+      return v;
+    }
+    const csrfToken = getCookie('csrftoken');
+
+    // Toast system
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      const icons = {
+        success: '✓',
+        error: '✕',
+        info: 'ℹ',
+      };
+      toast.className = `toast ${type}`;
+      toast.innerHTML = `<span class="text-lg">${icons[type] || '●'}</span> ${message}`;
+      container.appendChild(toast);
+      setTimeout(() => { toast.classList.add('fadeout'); setTimeout(() => toast.remove(), 300); }, 3500);
+    }
+
+    // Theme toggle
+    function toggleTheme() {
+      document.documentElement.classList.toggle('dark');
+      localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+    }
+    if (localStorage.getItem('theme') === 'light') document.documentElement.classList.remove('dark');
+
+    // Fetch helper
+    async function apiFetch(url, data) {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    }
+  </script>
+  {% block extra_js %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,458 @@
+{% extends "maintenance/base.html" %}
+{% load maintenance_tags %}
+
+{% block title %}HostelFix — {{ complaint.ticket_id }}{% endblock %}
+{% block page_title %}{{ complaint.ticket_id }}{% endblock %}
+{% block page_subtitle %}{{ complaint.title }}{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl">
+  <!-- Top Info Bar -->
+  <div class="flex flex-wrap items-center gap-3 mb-6">
+    <span class="px-3 py-1.5 rounded-full text-xs font-semibold {{ complaint.status|status_color }}" id="status-badge">{{ complaint.get_status_display }}</span>
+    <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold {{ complaint.urgency|urgency_color }}" id="urgency-badge">
+      <span class="w-1.5 h-1.5 rounded-full {{ complaint.urgency|urgency_dot }}"></span>
+      <span id="urgency-text">{{ complaint.get_urgency_display }}</span>
+    </span>
+    <span class="text-sm text-gray-500">{{ complaint.category|category_icon }} {{ complaint.get_category_display }}</span>
+    <span class="text-sm text-gray-400">·</span>
+    <span class="text-sm text-gray-500">Block {{ complaint.hostel_block }} · Room {{ complaint.room_number }}</span>
+    <span class="text-sm text-gray-400">·</span>
+    <span class="text-sm text-gray-500">{{ complaint.created_at|date:"M d, Y h:i A" }}</span>
+    {% if complaint.is_sla_breached %}
+    <span class="px-2 py-1 rounded text-[0.65rem] font-bold bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400 critical-pulse">⚠ SLA BREACHED ({{ complaint.age_hours }}h)</span>
+    {% endif %}
+  </div>
+
+  <!-- Status Stepper -->
+  <div class="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6 mb-6">
+    <div class="flex items-center justify-between max-w-lg mx-auto" id="stepper">
+      {% with step=complaint.status_step %}
+      {% for label in "Registered,Assigned,In Progress,Resolved" %}
+      {% with forloop.counter0 as i %}
+      <div class="flex flex-col items-center gap-2 relative z-10">
+        <div class="stepper-dot {% if i < step %}completed{% elif i == step %}current{% else %}pending{% endif %}" data-step="{{ i }}">
+          {% if i < step %}✓{% else %}{{ forloop.counter }}{% endif %}
+        </div>
+        <span class="text-xs font-medium {% if i <= step %}text-indigo-600 dark:text-indigo-400{% else %}text-gray-400{% endif %}">{{ label }}</span>
+      </div>
+      {% if not forloop.last %}
+      <div class="stepper-line {% if i < step %}completed{% else %}pending{% endif %}" data-line="{{ i }}"></div>
+      {% endif %}
+      {% endwith %}
+      {% endfor %}
+      {% endwith %}
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- Left Column: Details + Actions -->
+    <div class="lg:col-span-2 space-y-6">
+      <!-- Description -->
+      <div class="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6">
+        <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Description</h3>
+        <p class="text-gray-600 dark:text-gray-300 text-sm leading-relaxed whitespace-pre-wrap">{{ complaint.description }}</p>
+        {% if complaint.attachment %}
+        <div class="mt-4">
+          <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Attached Photo</p>
+          <img src="{{ complaint.attachment.url }}" alt="Issue photo" class="rounded-xl max-h-72 object-cover border border-gray-200 dark:border-gray-700">
+        </div>
+        {% endif %}
+        {% if complaint.resolution_notes %}
+        <div class="mt-4 p-4 bg-emerald-50 dark:bg-emerald-900/10 rounded-xl border border-emerald-200 dark:border-emerald-800">
+          <p class="text-xs font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider mb-1">Resolution Notes</p>
+          <p class="text-sm text-emerald-700 dark:text-emerald-300">{{ complaint.resolution_notes }}</p>
+        </div>
+        {% endif %}
+        {% if complaint.student_rating %}
+        <div class="mt-4 p-4 bg-amber-50 dark:bg-amber-900/10 rounded-xl border border-amber-200 dark:border-amber-800">
+          <p class="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-1">Student Rating</p>
+          <div class="flex items-center gap-2">
+            {% for _ in complaint.student_rating|star_range %}<span class="text-amber-500 text-lg">★</span>{% endfor %}
+            {% for _ in complaint.student_rating|empty_star_range %}<span class="text-gray-300 dark:text-gray-600 text-lg">★</span>{% endfor %}
+            <span class="text-sm text-gray-500 ml-2">({{ complaint.student_rating }}/5)</span>
+          </div>
+          {% if complaint.student_feedback %}<p class="text-sm text-gray-600 dark:text-gray-400 mt-2">{{ complaint.student_feedback }}</p>{% endif %}
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- Action Panels -->
+      {% if role == 'admin' %}
+      <div class="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6">
+        <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">Admin Actions</h3>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <!-- Assign Technician -->
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1.5">Assign Technician</label>
+            <select id="tech-select" class="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm">
+              <option value="">Select technician...</option>
+              {% for tp in technicians %}
+              <option value="{{ tp.user.id }}" {% if complaint.assigned_technician_id == tp.user.id %}selected{% endif %}>
+                {{ tp.display_name }} ({{ tp.get_specialization_display }})
+              </option>
+              {% endfor %}
+            </select>
+            <button onclick="assignTech()" class="mt-2 w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl transition-all">
+              Assign
+            </button>
+          </div>
+          <!-- Update Urgency -->
+          <div>
+            <label class="block text-xs font-medium text-gray-500 mb-1.5">Override Urgency</label>
+            <select id="urgency-select" class="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm">
+              <option value="low" {% if complaint.urgency == 'low' %}selected{% endif %}>Low</option>
+              <option value="medium" {% if complaint.urgency == 'medium' %}selected{% endif %}>Medium</option>
+              <option value="high" {% if complaint.urgency == 'high' %}selected{% endif %}>High</option>
+              <option value="critical" {% if complaint.urgency == 'critical' %}selected{% endif %}>Critical / Emergency</option>
+            </select>
+            <button onclick="updateUrgency()" class="mt-2 w-full px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded-xl transition-all">
+              Update Urgency
+            </button>
+          </div>
+        </div>
+        <!-- Status override -->
+        <div class="mt-4">
+          <label class="block text-xs font-medium text-gray-500 mb-1.5">Update Status</label>
+          <div class="flex flex-wrap gap-2" id="admin-status-buttons">
+            {% if complaint.status == 'registered' %}
+            <button onclick="updateStatus('assigned','Admin assigned')" class="px-4 py-2 bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 text-sm font-semibold rounded-xl hover:opacity-80 transition-all">→ Assigned</button>
+            {% endif %}
+            {% if complaint.status == 'assigned' %}
+            <button onclick="updateStatus('in_progress','Admin started')" class="px-4 py-2 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 text-sm font-semibold rounded-xl hover:opacity-80 transition-all">→ In Progress</button>
+            {% endif %}
+            {% if complaint.status == 'in_progress' %}
+            <button onclick="updateStatus('resolved','Admin resolved')" class="px-4 py-2 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 text-sm font-semibold rounded-xl hover:opacity-80 transition-all">→ Resolved</button>
+            {% endif %}
+            {% if complaint.status == 'resolved' %}
+            <button onclick="updateStatus('closed','Admin closed')" class="px-4 py-2 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 text-sm font-semibold rounded-xl hover:opacity-80 transition-all">→ Closed</button>
+            <button onclick="updateStatus('reopened','Admin reopened')" class="px-4 py-2 bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300 text-sm font-semibold rounded-xl hover:opacity-80 transition-all">↻ Reopen</button>
+            {% endif %}
+            {% if complaint.status == 'reopened' %}
+            <button onclick="updateStatus('assigned','Admin reassigned')" class="px-4 py-2 bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 text-sm font-semibold rounded-xl hover:opacity-80 transition-all">→ Assigned</button>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
+      {% if role == 'technician' %}
+      <div class="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6">
+        <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">Update Status</h3>
+        {% if complaint.status == 'assigned' or complaint.status == 'reopened' %}
+        <button onclick="updateStatus('in_progress','Started working on issue')" class="px-6 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded-xl transition-all shadow-lg">
+          ▶ Start Working
+        </button>
+        {% elif complaint.status == 'in_progress' %}
+        <div class="space-y-3">
+          <textarea id="resolution-notes" rows="3" placeholder="Add resolution notes..."
+            class="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm"></textarea>
+          <button onclick="resolveTicket()" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-xl transition-all shadow-lg">
+            ✓ Mark as Resolved
+          </button>
+        </div>
+        {% elif complaint.status == 'resolved' %}
+        <p class="text-sm text-emerald-600 dark:text-emerald-400 font-medium">✓ This ticket has been resolved. Waiting for student confirmation.</p>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      {% if role == 'student' and complaint.status == 'resolved' and not complaint.student_rating %}
+      <div class="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6">
+        <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">Confirm Resolution</h3>
+        <p class="text-sm text-gray-500 mb-4">Your issue has been marked as resolved. Please confirm or reopen the ticket.</p>
+        <div class="flex gap-3">
+          <button onclick="openRatingModal('close')" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-xl transition-all shadow-lg">
+            ✓ Confirm & Rate
+          </button>
+          <button onclick="openRatingModal('reopen')" class="px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-sm font-semibold rounded-xl transition-all shadow-lg">
+            ↻ Reopen Issue
+          </button>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- Comments -->
+      <div class="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6">
+        <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">Comments</h3>
+        <div id="comments-list" class="space-y-4 mb-4">
+          {% for c in comments %}
+          <div class="flex items-start gap-3">
+            <div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style="background:{{ c.author.profile.avatar_color }}">
+              {{ c.author.profile.initials }}
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-semibold text-gray-900 dark:text-white">{{ c.author.profile.display_name }}</span>
+                <span class="text-xs text-gray-400">{{ c.author.profile.get_role_display }}</span>
+                <span class="text-xs text-gray-400">· {{ c.created_at|date:"M d, h:i A" }}</span>
+              </div>
+              <p class="text-sm text-gray-600 dark:text-gray-300 mt-1">{{ c.message }}</p>
+            </div>
+          </div>
+          {% empty %}
+          <p class="text-sm text-gray-400" id="no-comments">No comments yet.</p>
+          {% endfor %}
+        </div>
+        <div class="flex gap-3">
+          <input type="text" id="comment-input" placeholder="Write a comment..."
+            class="flex-1 px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all">
+          <button onclick="addComment()" class="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl transition-all">Send</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Column: Info + Timeline -->
+    <div class="space-y-6">
+      <!-- Info Card -->
+      <div class="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6">
+        <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">Details</h3>
+        <dl class="space-y-3 text-sm">
+          <div class="flex justify-between">
+            <dt class="text-gray-400">Submitted by</dt>
+            <dd class="font-medium text-gray-900 dark:text-white">{{ complaint.student.get_full_name|default:complaint.student.username }}</dd>
+          </div>
+          <div class="flex justify-between">
+            <dt class="text-gray-400">Location</dt>
+            <dd class="font-medium text-gray-900 dark:text-white">Block {{ complaint.hostel_block }}, Room {{ complaint.room_number }}</dd>
+          </div>
+          <div class="flex justify-between">
+            <dt class="text-gray-400">Category</dt>
+            <dd class="font-medium text-gray-900 dark:text-white">{{ complaint.category|category_icon }} {{ complaint.get_category_display }}</dd>
+          </div>
+          <div class="flex justify-between">
+            <dt class="text-gray-400">Assigned to</dt>
+            <dd class="font-medium text-gray-900 dark:text-white" id="tech-name">
+              {% if complaint.assigned_technician %}{{ complaint.assigned_technician.get_full_name|default:complaint.assigned_technician.username }}{% else %}<span class="text-gray-400">Unassigned</span>{% endif %}
+            </dd>
+          </div>
+          <div class="flex justify-between">
+            <dt class="text-gray-400">Created</dt>
+            <dd class="text-gray-600 dark:text-gray-300">{{ complaint.created_at|date:"M d, Y h:i A" }}</dd>
+          </div>
+          {% if complaint.resolved_at %}
+          <div class="flex justify-between">
+            <dt class="text-gray-400">Resolved</dt>
+            <dd class="text-gray-600 dark:text-gray-300">{{ complaint.resolved_at|date:"M d, Y h:i A" }}</dd>
+          </div>
+          {% endif %}
+          <div class="flex justify-between">
+            <dt class="text-gray-400">Age</dt>
+            <dd class="{% if complaint.is_sla_breached %}text-red-500 font-semibold{% else %}text-gray-600 dark:text-gray-300{% endif %}">{{ complaint.age_hours }} hours</dd>
+          </div>
+        </dl>
+      </div>
+
+      <!-- Activity Timeline -->
+      <div class="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-6">
+        <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">Activity Timeline</h3>
+        <div class="space-y-4">
+          {% for entry in timeline %}
+          <div class="relative pl-8">
+            {% if not forloop.last %}<div class="timeline-connector"></div>{% endif %}
+            <div class="absolute left-0 top-1 w-[2.1rem] h-[2.1rem] rounded-full flex items-center justify-center
+              {% if entry.new_status == 'resolved' %}bg-emerald-100 dark:bg-emerald-900/30{% elif entry.new_status == 'reopened' %}bg-rose-100 dark:bg-rose-900/30{% elif entry.new_status == 'assigned' %}bg-indigo-100 dark:bg-indigo-900/30{% else %}bg-gray-100 dark:bg-gray-800{% endif %}">
+              {% if entry.new_status == 'resolved' %}
+              <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+              {% elif entry.new_status == 'reopened' %}
+              <svg class="w-4 h-4 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+              {% else %}
+              <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              {% endif %}
+            </div>
+            <div>
+              <p class="text-sm text-gray-700 dark:text-gray-300">
+                {% if entry.old_status and entry.new_status %}
+                <span class="font-semibold">{{ entry.changed_by.get_full_name|default:entry.changed_by.username }}</span>
+                changed status
+                <span class="px-1.5 py-0.5 rounded text-xs font-semibold {{ entry.old_status|status_color }}">{{ entry.old_status }}</span>
+                →
+                <span class="px-1.5 py-0.5 rounded text-xs font-semibold {{ entry.new_status|status_color }}">{{ entry.new_status }}</span>
+                {% elif entry.note %}
+                <span class="font-semibold">{{ entry.changed_by.get_full_name|default:entry.changed_by.username }}</span>:
+                {{ entry.note }}
+                {% endif %}
+              </p>
+              {% if entry.note and entry.old_status %}
+              <p class="text-xs text-gray-400 mt-0.5">{{ entry.note }}</p>
+              {% endif %}
+              <p class="text-xs text-gray-400 mt-1">{{ entry.timestamp|date:"M d, Y h:i A" }}</p>
+            </div>
+          </div>
+          {% empty %}
+          <p class="text-sm text-gray-400">No activity yet.</p>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Rating Modal -->
+<div id="rating-modal" class="modal-overlay">
+  <div class="modal-box">
+    <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-2" id="modal-title">Rate this resolution</h3>
+    <p class="text-sm text-gray-500 mb-4" id="modal-desc">How would you rate the maintenance service?</p>
+    <div class="star-rating mb-4" id="star-container">
+      <span class="star" data-val="1">★</span>
+      <span class="star" data-val="2">★</span>
+      <span class="star" data-val="3">★</span>
+      <span class="star" data-val="4">★</span>
+      <span class="star" data-val="5">★</span>
+    </div>
+    <textarea id="rating-feedback" rows="3" placeholder="Optional feedback..."
+      class="w-full px-4 py-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-sm mb-4"></textarea>
+    <input type="hidden" id="rating-value" value="0">
+    <input type="hidden" id="rating-action" value="close">
+    <div class="flex gap-3">
+      <button onclick="submitRating()" class="flex-1 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition-all" id="modal-submit-btn">Submit & Close</button>
+      <button onclick="closeRatingModal()" class="px-4 py-2.5 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-semibold rounded-xl transition-all">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<a href="{% url 'dashboard' %}" class="inline-flex items-center gap-2 mt-8 text-sm text-gray-400 hover:text-indigo-500 transition-colors">
+  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+  Back to Dashboard
+</a>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  const ticketId = '{{ complaint.ticket_id }}';
+
+  // Status update
+  async function updateStatus(status, note) {
+    const res = await apiFetch(`/api/complaints/${ticketId}/status/`, { status, note });
+    if (res.success) {
+      showToast(`Status updated to ${res.new_status_display}`, 'success');
+      setTimeout(() => location.reload(), 800);
+    } else {
+      showToast(res.error || 'Failed to update status', 'error');
+    }
+  }
+
+  // Resolve with notes
+  async function resolveTicket() {
+    const notes = document.getElementById('resolution-notes')?.value || '';
+    await updateStatus('resolved', notes);
+  }
+
+  // Assign technician
+  async function assignTech() {
+    const techId = document.getElementById('tech-select').value;
+    if (!techId) { showToast('Please select a technician', 'error'); return; }
+    const res = await apiFetch(`/api/complaints/${ticketId}/assign/`, { technician_id: techId });
+    if (res.success) {
+      showToast(`Assigned to ${res.technician_name}`, 'success');
+      document.getElementById('tech-name').textContent = res.technician_name;
+      setTimeout(() => location.reload(), 800);
+    } else {
+      showToast(res.error || 'Failed to assign', 'error');
+    }
+  }
+
+  // Update urgency
+  async function updateUrgency() {
+    const urgency = document.getElementById('urgency-select').value;
+    const res = await apiFetch(`/api/complaints/${ticketId}/urgency/`, { urgency });
+    if (res.success) {
+      showToast(`Urgency updated to ${res.display}`, 'success');
+      document.getElementById('urgency-text').textContent = res.display;
+    } else {
+      showToast(res.error || 'Failed', 'error');
+    }
+  }
+
+  // Comments
+  async function addComment() {
+    const input = document.getElementById('comment-input');
+    const message = input.value.trim();
+    if (!message) return;
+    const res = await apiFetch(`/api/complaints/${ticketId}/comment/`, { message });
+    if (res.success) {
+      const c = res.comment;
+      const noComments = document.getElementById('no-comments');
+      if (noComments) noComments.remove();
+      document.getElementById('comments-list').insertAdjacentHTML('beforeend', `
+        <div class="flex items-start gap-3">
+          <div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0" style="background:${c.color}">${c.initials}</div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-semibold text-gray-900 dark:text-white">${c.author}</span>
+              <span class="text-xs text-gray-400">${c.role}</span>
+              <span class="text-xs text-gray-400">· ${c.created_at}</span>
+            </div>
+            <p class="text-sm text-gray-600 dark:text-gray-300 mt-1">${c.message}</p>
+          </div>
+        </div>
+      `);
+      input.value = '';
+      showToast('Comment added', 'success');
+    }
+  }
+
+  // Enter key for comment
+  document.getElementById('comment-input').addEventListener('keypress', e => {
+    if (e.key === 'Enter') addComment();
+  });
+
+  // Rating modal
+  let selectedRating = 0;
+  function openRatingModal(action) {
+    document.getElementById('rating-action').value = action;
+    if (action === 'reopen') {
+      document.getElementById('modal-title').textContent = 'Reopen Issue';
+      document.getElementById('modal-desc').textContent = 'Please rate and explain why the issue is not resolved.';
+      document.getElementById('modal-submit-btn').textContent = 'Reopen Issue';
+      document.getElementById('modal-submit-btn').className = 'flex-1 px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-xl transition-all';
+    } else {
+      document.getElementById('modal-title').textContent = 'Rate Resolution';
+      document.getElementById('modal-desc').textContent = 'How would you rate the maintenance service?';
+      document.getElementById('modal-submit-btn').textContent = 'Confirm & Close';
+      document.getElementById('modal-submit-btn').className = 'flex-1 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl transition-all';
+    }
+    document.getElementById('rating-modal').classList.add('active');
+  }
+
+  function closeRatingModal() {
+    document.getElementById('rating-modal').classList.remove('active');
+  }
+
+  document.querySelectorAll('.star').forEach(star => {
+    star.addEventListener('click', () => {
+      selectedRating = parseInt(star.dataset.val);
+      document.getElementById('rating-value').value = selectedRating;
+      document.querySelectorAll('.star').forEach(s => {
+        s.classList.toggle('filled', parseInt(s.dataset.val) <= selectedRating);
+      });
+    });
+    star.addEventListener('mouseenter', () => {
+      const val = parseInt(star.dataset.val);
+      document.querySelectorAll('.star').forEach(s => {
+        s.classList.toggle('filled', parseInt(s.dataset.val) <= val);
+      });
+    });
+  });
+  document.getElementById('star-container').addEventListener('mouseleave', () => {
+    document.querySelectorAll('.star').forEach(s => {
+      s.classList.toggle('filled', parseInt(s.dataset.val) <= selectedRating);
+    });
+  });
+
+  async function submitRating() {
+    const rating = parseInt(document.getElementById('rating-value').value);
+    const feedback = document.getElementById('rating-feedback').value;
+    const action = document.getElementById('rating-action').value;
+    if (rating < 1) { showToast('Please select a rating', 'error'); return; }
+    const res = await apiFetch(`/api/complaints/${ticketId}/rate/`, { rating, feedback, action });
+    if (res.success) {
+      showToast(action === 'close' ? 'Ticket closed. Thank you!' : 'Ticket reopened.', 'success');
+      closeRatingModal();
+      setTimeout(() => location.reload(), 800);
+    } else {
+      showToast(res.error || 'Failed', 'error');
+    }
+  }
+</script>
+{% endblock %}

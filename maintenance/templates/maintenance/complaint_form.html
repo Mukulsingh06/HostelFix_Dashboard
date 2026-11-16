@@ -1,0 +1,88 @@
+{% extends "maintenance/base.html" %}
+{% load maintenance_tags %}
+
+{% block title %}HostelFix — New Complaint{% endblock %}
+{% block page_title %}Submit New Complaint{% endblock %}
+{% block page_subtitle %}Report a maintenance issue in your hostel room{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl">
+  <div class="bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-800 p-8">
+    <form method="post" enctype="multipart/form-data" class="space-y-6">
+      {% csrf_token %}
+
+      {% if form.errors %}
+      <div class="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-700 dark:text-red-400">
+        Please correct the errors below.
+      </div>
+      {% endif %}
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Issue Title *</label>
+        {{ form.title }}
+        <p class="text-xs text-gray-400 mt-1">A brief summary of the problem</p>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Category *</label>
+          {{ form.category }}
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Urgency *</label>
+          {{ form.urgency }}
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Hostel Block</label>
+          {{ form.hostel_block }}
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Room Number</label>
+          {{ form.room_number }}
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Description *</label>
+        {{ form.description }}
+      </div>
+
+      <!-- File upload -->
+      <div>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">Attach Photo (optional)</label>
+        <div id="upload-zone" onclick="document.getElementById('attachment-input').click()"
+          class="border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-xl p-8 text-center cursor-pointer hover:border-indigo-400 transition-colors">
+          <svg class="w-10 h-10 mx-auto text-gray-300 dark:text-gray-600 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+          <p class="text-sm text-gray-500">Click to upload an image of the issue</p>
+          <p id="file-name" class="text-xs text-indigo-500 mt-2 font-medium hidden"></p>
+        </div>
+        {{ form.attachment }}
+      </div>
+
+      <div class="flex gap-3 pt-2">
+        <button type="submit" class="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition-all shadow-lg shadow-indigo-500/25">
+          Submit Complaint
+        </button>
+        <a href="{% url 'dashboard' %}" class="px-8 py-3 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 font-semibold rounded-xl transition-all">
+          Cancel
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.getElementById('attachment-input').addEventListener('change', function() {
+    const nameEl = document.getElementById('file-name');
+    if (this.files.length > 0) {
+      nameEl.textContent = '📎 ' + this.files[0].name;
+      nameEl.classList.remove('hidden');
+    }
+  });
+</script>
+{% endblock %}
